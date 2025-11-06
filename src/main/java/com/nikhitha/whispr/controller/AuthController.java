@@ -6,6 +6,9 @@ import com.nikhitha.whispr.dto.SignUpRequest;
 import com.nikhitha.whispr.entity.User;
 import com.nikhitha.whispr.repository.UserRepository;
 import com.nikhitha.whispr.security.JwtUtils;
+
+import java.time.LocalDateTime;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,28 +21,38 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "http://localhost:3000")
 public class AuthController {
-     @Autowired
+
+    @Autowired
     AuthenticationManager authenticationManager;
+
     @Autowired
     UserRepository userRepository;
+
     @Autowired
     PasswordEncoder passwordEncoder;
+
     @Autowired
     JwtUtils jwtUtils;
 
     @PostMapping("/signin")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
+    public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = jwtUtils.generateTokenFromUsername(loginRequest.getUsername());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = jwtUtils.generateTokenFromUsername(loginRequest.getUsername());
 
-        User user = userRepository.findByUsername(loginRequest.getUsername())
+            User user = userRepository.findByUsername(loginRequest.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-    return ResponseEntity.ok(new JwtResponse(jwt, "Bearer", user.getId(), user.getUsername(), user.getEmail()));    }
+            return ResponseEntity.ok(new JwtResponse(jwt, "Bearer", user.getId(), user.getUsername(), user.getEmail()));    
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) {
@@ -54,11 +67,9 @@ public class AuthController {
         User user = new User();
         user.setUsername(signUpRequest.getUsername());
         user.setEmail(signUpRequest.getEmail());
-        user.setPassword(passwordEncoder.encode(signUpRequest.getPassword())); 
+        user.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
+        user.setCreatedAt(LocalDateTime.now());
         userRepository.save(user);
-
-        User savedUser = userRepository.save(user);//             remove
-        System.out.println("User saved with ID: " + savedUser.getId()); // this too
         return ResponseEntity.ok("User registered successfully!");
     }   
 }

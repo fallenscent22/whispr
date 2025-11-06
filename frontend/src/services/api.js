@@ -46,4 +46,26 @@ export const authAPI = {
   },
 };
 
+export const messageAPI = {
+  getRecentMessages: async (roomId) => {
+    const response = await api.get(`/messages/recent/${roomId}`);
+    return response.data;
+  },
+  
+  getMessageHistory: async (roomId, page = 0, size = 20) => {
+    const response = await api.get(`/messages/history/${roomId}?page=${page}&size=${size}`);
+    return response.data;
+  },
+  
+  getOnlineUsers: async () => {
+    const response = await api.get('/messages/online-users');
+    return response.data;
+  },
+  
+  markMessagesAsRead: async (roomId, username) => {
+    const response = await api.post(`/messages/mark-read/${roomId}?username=${username}`);
+    return response.data;
+  }
+};
+
 export default api;

@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { api, authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -31,8 +31,13 @@ export const AuthProvider = ({ children }) => {
       
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(userData));
+      
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      return response;
     } catch (error) {
-      throw new Error(error.response?.data || 'Login failed');
+      console.error('Login error:', error);
+      throw new Error(error.response?.data || 'Login failed. Please check your credentials.');
     }
   };
 

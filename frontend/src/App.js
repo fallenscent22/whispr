@@ -6,7 +6,6 @@ import { SignupPage } from './pages/SignUpPage';
 import { ChatPage } from './pages/ChatPage';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 
-// Component to handle redirects based on auth status
 const AppRoutes = () => {
   const { user } = useAuth();
 

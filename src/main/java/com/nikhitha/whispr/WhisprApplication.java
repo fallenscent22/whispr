@@ -9,5 +9,4 @@ public class WhisprApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(WhisprApplication.class, args);
 	}
-
 }

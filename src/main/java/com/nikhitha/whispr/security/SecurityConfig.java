@@ -21,7 +21,7 @@ import java.util.Arrays;
 @EnableWebSecurity
 public class SecurityConfig {
     @Autowired
-    private CustomUserDetailsService customUserDetailsService; //didn't use but kept for reference(customUserDetailsService)
+    private CustomUserDetailsService customUserDetailsService;
 
     @Autowired
     private JwtAuthEntryPoint jwtAuthEntryPoint;
@@ -40,6 +40,7 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
+    
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -83,5 +84,4 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-
 }

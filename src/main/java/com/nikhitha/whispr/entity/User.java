@@ -5,6 +5,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
+
+
 import lombok.Data;
 
 @Entity
@@ -33,6 +37,9 @@ public class User {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Message> messages = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
