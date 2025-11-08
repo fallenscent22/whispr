@@ -3,7 +3,7 @@ package com.nikhitha.whispr.security;
 import com.nikhitha.whispr.entity.User;
 import com.nikhitha.whispr.repository.UserRepository;
 
-import com.nikhitha.whispr.security.UserPrincipal;
+// import com.nikhitha.whispr.security.UserPrincipal;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;

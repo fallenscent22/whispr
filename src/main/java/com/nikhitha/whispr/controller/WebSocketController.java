@@ -3,6 +3,9 @@ package com.nikhitha.whispr.controller;
 import com.nikhitha.whispr.dto.ChatMessage;
 import com.nikhitha.whispr.dto.WebSocketUser;
 import com.nikhitha.whispr.service.MessageService;
+import com.nikhitha.whispr.service.TypingService;
+
+import lombok.Data;
 
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -12,14 +15,12 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.beans.factory.annotation.Autowired;
 
-
 import java.time.LocalDateTime;
 
 @Controller
 public class WebSocketController {
-     @Autowired
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
-    
 
     @Autowired
     private MessageService messageService;
@@ -36,29 +37,29 @@ public class WebSocketController {
 
     @MessageMapping("/chat.addUser")
     @SendTo("/topic/public")
-    public ChatMessage addUser(@Payload ChatMessage chatMessage, 
-                               SimpMessageHeaderAccessor headerAccessor) {
+    public ChatMessage addUser(@Payload ChatMessage chatMessage,
+            SimpMessageHeaderAccessor headerAccessor) {
         headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
         chatMessage.setTimestamp(LocalDateTime.now());
 
-         messageService.addOnlineUser(chatMessage.getSender());
-        
-        messagingTemplate.convertAndSend("/topic/online.users", 
-            messageService.getOnlineUsers());
+        messageService.addOnlineUser(chatMessage.getSender());
+
+        messagingTemplate.convertAndSend("/topic/online.users",
+                messageService.getOnlineUsers());
 
         return chatMessage;
     }
-    
-     @MessageMapping("/chat.leave")
+
+    @MessageMapping("/chat.leave")
     @SendTo("/topic/public")
     public ChatMessage leaveUser(@Payload ChatMessage chatMessage) {
         chatMessage.setTimestamp(LocalDateTime.now());
-        
+
         messageService.removeOnlineUser(chatMessage.getSender());
-        
-        messagingTemplate.convertAndSend("/topic/online.users", 
-            messageService.getOnlineUsers());
-        
+
+        messagingTemplate.convertAndSend("/topic/online.users",
+                messageService.getOnlineUsers());
+
         return chatMessage;
     }
 
@@ -68,8 +69,8 @@ public class WebSocketController {
     }
 
     @MessageMapping("/chat.markRead")
-    public void markMessagesAsRead(@Payload String roomId, 
-                                   SimpMessageHeaderAccessor headerAccessor) {
+    public void markMessagesAsRead(@Payload String roomId,
+            SimpMessageHeaderAccessor headerAccessor) {
         String username = (String) headerAccessor.getSessionAttributes().get("username");
         if (username != null && roomId != null) {
             messageService.markMessagesAsRead(roomId, username);
@@ -80,9 +81,64 @@ public class WebSocketController {
     public void sendPrivateMessage(@Payload ChatMessage chatMessage) {
         chatMessage.setTimestamp(LocalDateTime.now());
         messagingTemplate.convertAndSendToUser(
-            chatMessage.getRoomId(),
-            "/queue/messages", 
-            chatMessage
-        );
+                chatMessage.getRoomId(),
+                "/queue/messages",
+                chatMessage);
+    }
+
+    @Autowired
+    private TypingService typingService;
+
+    @MessageMapping("/chat.typing.start")
+    public void startTyping(@Payload TypingRequest typingRequest,
+            SimpMessageHeaderAccessor headerAccessor) {
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            typingService.startTyping(typingRequest.getRoomId(), username);
+        }
+    }
+
+    @MessageMapping("/chat.typing.stop")
+    public void stopTyping(@Payload TypingRequest typingRequest,
+            SimpMessageHeaderAccessor headerAccessor) {
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            typingService.stopTyping(typingRequest.getRoomId(), username);
+        }
+    }
+
+    @MessageMapping("/chat.message.read")
+    public void markMessageAsRead(@Payload ReadReceiptRequest readReceiptRequest,
+            SimpMessageHeaderAccessor headerAccessor) {
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            messageService.markMessageAsRead(readReceiptRequest.getMessageId(), username);
+        }
+    }
+
+    @MessageMapping("/chat.message.delivered")
+    public void markMessageAsDelivered(@Payload DeliveryReceiptRequest deliveryReceiptRequest,
+            SimpMessageHeaderAccessor headerAccessor) {
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null) {
+            messageService.markMessageAsDelivered(deliveryReceiptRequest.getMessageId());
+        }
+    }
+
+    @Data
+    public static class TypingRequest {
+        private String roomId;
+    }
+
+    @Data
+    public static class ReadReceiptRequest {
+        private Long messageId;
+        private String roomId;
+    }
+
+    @Data
+    public static class DeliveryReceiptRequest {
+        private Long messageId;
+        private String roomId;
     }
 }

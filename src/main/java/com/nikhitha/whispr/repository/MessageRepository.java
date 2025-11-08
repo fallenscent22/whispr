@@ -29,4 +29,14 @@ public interface MessageRepository extends JpaRepository<Message, Long>{
     @Transactional
     @Query("UPDATE Message m SET m.isRead = true WHERE m.roomId = :roomId AND m.isRead = false AND m.sender.username != :username")
     void markMessagesAsRead(@Param("roomId") String roomId, @Param("username") String username);
+    
+
+    @Query("SELECT m FROM Message m WHERE m.roomId = :roomId AND m.isRead = false AND m.sender.id != :userId")
+    List<Message> findUnreadMessagesInRoom(@Param("roomId") String roomId, @Param("userId") Long userId);
+
+    @Query("SELECT m FROM Message m WHERE m.roomId = :roomId AND m.isDelivered = false AND m.sender.id != :userId")
+    List<Message> findUndeliveredMessagesInRoom(@Param("roomId") String roomId, @Param("userId") Long userId);
+
+    @Query("SELECT COUNT(m) FROM Message m WHERE m.roomId = :roomId AND m.isRead = false AND m.sender.id != :userId")
+    Long countUnreadMessages(@Param("roomId") String roomId, @Param("userId") Long userId);
 }
