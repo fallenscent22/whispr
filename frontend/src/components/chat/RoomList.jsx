@@ -1,10 +1,28 @@
 import React from 'react';
+import React, { useState, useMemo } from 'react';
+
+
 
 export const RoomList = ({ rooms, currentRoom, onRoomSelect, onJoinRoom }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const filteredRooms = useMemo(() => {
+  return rooms.filter(room => 
+    room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    room.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+}, [rooms, searchTerm]);
+
   return (
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-4 border-b">
         <h3 className="font-semibold text-gray-800">Chat Rooms</h3>
+         <input
+          type="text"
+          placeholder="Search rooms..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-2 border rounded mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
       
       <div className="max-h-96 overflow-y-auto">

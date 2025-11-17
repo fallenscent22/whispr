@@ -3,9 +3,14 @@ import { Client } from '@stomp/stompjs';
 import { messageAPI } from './api';
 
 class WebSocketService {
+
+  
   constructor() {
     this.client = null;
     this.isConnected = false;
+    this.maxReconnectAttempts = 5;
+    this.reconnectAttempts = 0;
+    this.reconnectInterval = 3000;
   }
 
   connect(
@@ -182,6 +187,25 @@ class WebSocketService {
         }
       });
     }
+  }
+
+  //reconnection logic
+
+  connectWithRetry(callbacks, roomId = 'global') {
+    try {
+      this.connect(callbacks, roomId);
+    } catch (error) {
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        setTimeout(() => {
+          this.reconnectAttempts++;
+          this.connectWithRetry(callbacks, roomId);
+        }, this.reconnectInterval);
+      }
+    }
+  }
+
+  getConnectionState() {
+    return this.isConnected ? 'connected' : 'disconnected';
   }
 }
 

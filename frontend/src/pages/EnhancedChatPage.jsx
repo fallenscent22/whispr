@@ -11,6 +11,7 @@ import { NotificationBell } from '../components/notifications/NotificationBell';
 import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { MessageStatus } from '../components/chat/MessageStatus';
 import { UserPresence } from '../components/chat/UserPresence';
+import { debounce } from 'lodash'; 
 
 export const EnhancedChatPage = () => {
   const { user, logout } = useAuth();
@@ -24,12 +25,12 @@ export const EnhancedChatPage = () => {
   const [loadingRooms, setLoadingRooms] = useState(false);
   const messagesEndRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
-
-  // Added states
   const [typingUsers, setTypingUsers] = useState([]);
   const [userPresence, setUserPresence] = useState({});
   const [typingTimeout, setTypingTimeout] = useState(null);
 
+  const memoizedMessages = useMemo(() => messages, [messages]);
+  const memoizedOnlineUsers = useMemo(() => onlineUsers, [onlineUsers]);
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -248,7 +249,13 @@ export const EnhancedChatPage = () => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Updated renderMessage with MessageStatus
+  const debouncedTyping = useCallback(
+  debounce((roomId) => {
+    WebSocketService.stopTyping(roomId);
+  }, 1000),
+  []
+);
+
   const renderMessage = (message, index) => {
     const isSystemMessage = message.type === 'JOIN' || message.type === 'LEAVE';
     const isMyMessage = message.sender === user?.username;

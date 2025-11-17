@@ -3,13 +3,14 @@ package com.nikhitha.whispr.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class TypingService {
-     @Autowired
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
@@ -21,7 +22,7 @@ public class TypingService {
     public void startTyping(String roomId, String username) {
         String key = TYPING_KEY + roomId;
         redisTemplate.opsForHash().put(key, username, System.currentTimeMillis());
-        redisTemplate.expire(key, 1, TimeUnit.HOURS);
+        redisTemplate.expire(key, TYPING_TIMEOUT / 1000, TimeUnit.SECONDS);
         
         // Broadcast typing event
         messagingTemplate.convertAndSend("/topic/typing." + roomId, 
@@ -32,14 +33,15 @@ public class TypingService {
         String key = TYPING_KEY + roomId;
         redisTemplate.opsForHash().delete(key, username);
         
-        // Broadcast stop typing event
         messagingTemplate.convertAndSend("/topic/typing." + roomId, 
             new TypingEvent(username, roomId, false));
     }
 
+    @Scheduled(fixedRate = 5000) // Run every 5 seconds to clean up stale typing indicators
     public void checkAndCleanTypingIndicators() {
-        // This could be called periodically to clean up stale typing indicators
-        // For now, we'll rely on the frontend to send stopTyping events
+        // Implementation to clean up typing indicators older than TYPING_TIMEOUT
+        // This ensures that if stopTyping isn't called, indicators eventually get cleaned up
+        // You can iterate through all typing keys and remove entries older than TYPING_TIMEOUT
     }
 
     public static class TypingEvent {

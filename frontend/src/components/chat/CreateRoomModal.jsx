@@ -44,9 +44,12 @@ export const CreateRoomModal = ({ isOpen, onClose, onCreateRoom }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    role="dialog"
+      aria-labelledby="create-room-title"
+      aria-modal="true">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Create New Chat Room</h2>
+        <h2 id="create-room-title" className="text-xl font-bold mb-4">Create New Chat Room</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
@@ -107,7 +110,6 @@ export const CreateRoomModal = ({ isOpen, onClose, onCreateRoom }) => {
             min="2"
             max="1000"
           />
-          
           <div className="flex justify-end space-x-2">
             <Button
               type="button"

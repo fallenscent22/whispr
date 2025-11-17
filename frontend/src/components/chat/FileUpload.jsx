@@ -3,21 +3,12 @@ import { useDropzone } from 'react-dropzone';
 
 export const FileUpload = ({ onFileUpload, disabled = false }) => {
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const onDrop = useCallback(async (acceptedFiles) => {
-    if (acceptedFiles.length === 0) return;
-
     const file = acceptedFiles[0];
     setUploading(true);
-
-    try {
-      await onFileUpload(file);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('File upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-    }
+    setUploadProgress(0);
   }, [onFileUpload]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -30,7 +21,7 @@ export const FileUpload = ({ onFileUpload, disabled = false }) => {
       'application/msword': ['.doc'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
     },
-    maxSize: 5* 1024 * 1024 // 5MB
+    maxSize: 5 * 1024 * 1024 // 5MB
   });
 
   const handleFileUpload = async (file) => {

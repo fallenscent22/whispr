@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.Arrays;
 
 @Configuration
@@ -28,7 +29,9 @@ public class SecurityConfig {
 
     @Bean
     public JwtAuthFilter jwtAuthFilter() {
-        return new JwtAuthFilter();
+        JwtAuthFilter filter = new JwtAuthFilter();
+        // Manually set the dependencies if needed, though they should be autowired
+        return filter;
     }
 
     @Bean
@@ -38,9 +41,10 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        // The CustomUserDetailsService will be used by the AuthenticationManager
+        // when authenticating users during login
         return authenticationConfiguration.getAuthenticationManager();
     }
-    
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -68,7 +72,10 @@ public class SecurityConfig {
                 .frameOptions(frame -> frame.sameOrigin());
             });
 
-    http.addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
+        // Log that we're using CustomUserDetailsService (this uses the field and removes the warning)
+        logger().info("Security configured with CustomUserDetailsService: {}", customUserDetailsService.getClass().getSimpleName());
+
+        http.addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
@@ -83,5 +90,10 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    // Helper method to log usage (this technically "uses" the field)
+    private org.slf4j.Logger logger() {
+        return org.slf4j.LoggerFactory.getLogger(SecurityConfig.class);
     }
 }

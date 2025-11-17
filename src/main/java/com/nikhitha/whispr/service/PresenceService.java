@@ -23,10 +23,8 @@ public class PresenceService {
     private static final String LAST_SEEN_KEY = "last_seen:";
 
     public void userConnected(String username, String sessionId) {
-        // Add to online users set
         redisTemplate.opsForSet().add(ONLINE_USERS_KEY, username);
 
-        // Track user sessions
         String userSessionsKey = USER_SESSIONS_KEY + username;
         redisTemplate.opsForSet().add(userSessionsKey, sessionId);
         redisTemplate.expire(userSessionsKey, 1, TimeUnit.DAYS);
@@ -43,9 +41,7 @@ public class PresenceService {
         Long remainingSessions = redisTemplate.opsForSet().size(userSessionsKey);
         if (remainingSessions == null || remainingSessions == 0) {
             redisTemplate.opsForSet().remove(ONLINE_USERS_KEY, username);
-
             updateLastSeen(username);
-
             broadcastPresenceUpdate(username, false);
         }
     }
@@ -96,36 +92,13 @@ public class PresenceService {
             this.timestamp = LocalDateTime.now();
         }
 
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public boolean isOnline() {
-            return online;
-        }
-
-        public void setOnline(boolean online) {
-            this.online = online;
-        }
-
-        public LocalDateTime getLastSeen() {
-            return lastSeen;
-        }
-
-        public void setLastSeen(LocalDateTime lastSeen) {
-            this.lastSeen = lastSeen;
-        }
-
-        public LocalDateTime getTimestamp() {
-            return timestamp;
-        }
-
-        public void setTimestamp(LocalDateTime timestamp) {
-            this.timestamp = timestamp;
-        }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public boolean isOnline() { return online; }
+        public void setOnline(boolean online) { this.online = online; }
+        public LocalDateTime getLastSeen() { return lastSeen; }
+        public void setLastSeen(LocalDateTime lastSeen) { this.lastSeen = lastSeen; }
+        public LocalDateTime getTimestamp() { return timestamp; }
+        public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
     }
 }

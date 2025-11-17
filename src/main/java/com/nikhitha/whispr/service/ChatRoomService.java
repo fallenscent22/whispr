@@ -4,6 +4,7 @@ import com.nikhitha.whispr.dto.ChatRoomDTO;
 import com.nikhitha.whispr.entity.ChatRoom;
 import com.nikhitha.whispr.entity.RoomMember;
 import com.nikhitha.whispr.entity.User;
+import org.springframework.beans.factory.annotation.Value;
 import com.nikhitha.whispr.repository.ChatRoomRepository;
 import com.nikhitha.whispr.repository.RoomMemberRepository;
 import com.nikhitha.whispr.repository.UserRepository;
@@ -31,6 +32,9 @@ public class ChatRoomService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Value("${app.system.email}")
+    private String systemEmail;
 
     @Transactional
     public ChatRoom createChatRoom(ChatRoomDTO chatRoomDTO, String creatorUsername) {
@@ -156,7 +160,7 @@ public class ChatRoomService {
                             // Create a system user if doesn't exist
                             User user = new User();
                             user.setUsername("system");
-                            user.setEmail("system@whispr.com");
+                            user.setEmail(systemEmail);
                             user.setPassword(passwordEncoder.encode("system"));
                             return userRepository.save(user);
                         });

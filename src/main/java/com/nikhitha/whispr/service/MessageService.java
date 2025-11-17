@@ -1,25 +1,33 @@
 package com.nikhitha.whispr.service;
 
+import com.nikhitha.whispr.dto.CachedMessage;
 import com.nikhitha.whispr.dto.ChatMessage;
 import com.nikhitha.whispr.entity.Message;
 import com.nikhitha.whispr.entity.RoomMember;
 import com.nikhitha.whispr.entity.User;
 import com.nikhitha.whispr.repository.MessageRepository;
 import com.nikhitha.whispr.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import com.nikhitha.whispr.repository.RoomMemberRepository;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 public class MessageService {
+    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
+
     @Autowired
     private MessageRepository messageRepository;
 
@@ -52,31 +60,41 @@ public class MessageService {
         message.setCreatedAt(chatMessage.getTimestamp());
 
         Message savedMessage = messageRepository.save(message);
-
         cacheMessage(savedMessage);
-
         return savedMessage;
     }
 
     @Transactional(readOnly = true)
     public List<Message> getRecentMessages(String roomId) {
-        String cacheKey = RECENT_MESSAGES_KEY + roomId;
-        Object cachedData = redisTemplate.opsForValue().get(cacheKey);
-        List<Message> cachedMessages = null;
-
-        if (cachedData instanceof List<?>) {
-            cachedMessages = ((List<?>) cachedData).stream()
-                    .filter(obj -> obj instanceof Message)
-                    .map(obj -> (Message) obj)
-                    .toList();
+        try {
+            String cacheKey = RECENT_MESSAGES_KEY + roomId;
+            List<CachedMessage> cachedMessages = getCachedMessages(cacheKey);
+            
+            if (cachedMessages != null && !cachedMessages.isEmpty()) {
+                return cachedMessages.stream()
+                    .map(cachedMsg -> {
+                        User sender = userRepository.findByUsername(cachedMsg.getSender())
+                            .orElseThrow(() -> new RuntimeException("User not found: " + cachedMsg.getSender()));
+                        return cachedMsg.toEntity(sender);
+                    })
+                    .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            logger.warn("Cache read failed, falling back to database", e);
         }
-
-        if (cachedMessages != null && !cachedMessages.isEmpty()) {
-            return cachedMessages;
-        }
+        
         List<Message> messages = messageRepository.findTop50ByRoomIdOrderByCreatedAtDesc(roomId);
-        redisTemplate.opsForValue().set(cacheKey, messages, CACHE_EXPIRY_HOURS, TimeUnit.HOURS);
-
+        
+        try {
+            String cacheKey = RECENT_MESSAGES_KEY + roomId;
+            List<CachedMessage> cachedMessages = messages.stream()
+                .map(CachedMessage::fromEntity)
+                .collect(Collectors.toList());
+            redisTemplate.opsForValue().set(cacheKey, cachedMessages, CACHE_EXPIRY_HOURS, TimeUnit.HOURS);
+        } catch (Exception e) {
+            logger.warn("Failed to cache recent messages", e);
+        }
+        
         return messages;
     }
 
@@ -86,25 +104,37 @@ public class MessageService {
     }
 
     private void cacheMessage(Message message) {
-        String cacheKey = RECENT_MESSAGES_KEY + (message.getRoomId() != null ? message.getRoomId() : "global");
-
-        Object cachedData = redisTemplate.opsForValue().get(cacheKey);
-        List<Message> cachedMessages = null;
-
-        if (cachedData instanceof List<?>) {
-            cachedMessages = ((List<?>) cachedData).stream()
-                    .filter(obj -> obj instanceof Message)
-                    .map(obj -> (Message) obj)
-                    .toList();
-        }
-
-        if (cachedMessages != null) {
-            cachedMessages.add(0, message);
+        try {
+            String cacheKey = RECENT_MESSAGES_KEY + (message.getRoomId() != null ? message.getRoomId() : "global");
+            List<CachedMessage> cachedMessages = getCachedMessages(cacheKey);
+            
+            if (cachedMessages == null) {
+                cachedMessages = new ArrayList<>();
+            }
+            
+            cachedMessages.add(0, CachedMessage.fromEntity(message));
+            
             if (cachedMessages.size() > 50) {
                 cachedMessages = cachedMessages.subList(0, 50);
             }
+            
             redisTemplate.opsForValue().set(cacheKey, cachedMessages, CACHE_EXPIRY_HOURS, TimeUnit.HOURS);
+        } catch (Exception e) {
+            logger.warn("Failed to cache message, continuing without cache", e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<CachedMessage> getCachedMessages(String cacheKey) {
+        try {
+            Object cachedData = redisTemplate.opsForValue().get(cacheKey);
+            if (cachedData instanceof List) {
+                return (List<CachedMessage>) cachedData;
+            }
+        } catch (Exception e) {
+            logger.warn("Error reading from cache for key: {}", cacheKey, e);
+        }
+        return null;
     }
 
     public void addOnlineUser(String username) {
@@ -120,7 +150,7 @@ public class MessageService {
         return redisTemplate.opsForSet().members(ONLINE_USERS_KEY)
                 .stream()
                 .map(Object::toString)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     public boolean isUserOnline(String username) {
@@ -171,19 +201,21 @@ public class MessageService {
         messageRepository.save(message);
     }
 
+    @Transactional
+    public void handleIncomingChatMessage(ChatMessage chatMessage) {
+        Message saved = saveMessage(chatMessage);
+        String room = saved.getRoomId() != null ? saved.getRoomId() : "global";
+        messagingTemplate.convertAndSend("/topic/messages/" + room, chatMessage);
+    }
+
     private boolean isUserInRoom(Long userId, String roomId) {
-        //for global room, all users are considered members
         if("global".equals(roomId)) {
             return true;
         }
-        
-        // for other rooms check membership
         return roomMemberRepository.findByRoomIdAndUserId(roomId, userId).isPresent();
     }
 
     private void updateLastReadTimestamp(String roomId, String username) {
-
-        // for global room, skip room member check
         if("global".equals(roomId)) {
             return; 
         }
@@ -206,29 +238,11 @@ public class MessageService {
             this.timestamp = timestamp;
         }
 
-        // Getters and setters
-        public Long getMessageId() {
-            return messageId;
-        }
-
-        public void setMessageId(Long messageId) {
-            this.messageId = messageId;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public long getTimestamp() {
-            return timestamp;
-        }
-
-        public void setTimestamp(long timestamp) {
-            this.timestamp = timestamp;
-        }
+        public Long getMessageId() { return messageId; }
+        public void setMessageId(Long messageId) { this.messageId = messageId; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
     }
 }
