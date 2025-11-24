@@ -11,6 +11,8 @@ class WebSocketService {
     this.maxReconnectAttempts = 5;
     this.reconnectAttempts = 0;
     this.reconnectInterval = 3000;
+    this.heartbeatInterval = null;
+    this.heartbeatIntervalMs = 30000; // send heartbeat every 30 seconds
   }
 
   connect(
@@ -24,9 +26,24 @@ class WebSocketService {
     onPresenceUpdate,
     roomId = 'global'
   ) {
-    // Avoid creating multiple active clients
+    // If already connected to a different room, disconnect first
     if (this.client && this.client.active) {
-      console.log('WebSocket already connected or connecting. Skipping new connect.');
+      console.log(`Switching from current room to room: ${roomId}. Disconnecting and reconnecting.`);
+      this.disconnect();
+      // Wait a moment before reconnecting
+      setTimeout(() => {
+        this.connect(
+          onMessageReceived,
+          onUserJoined,
+          onUserTyping,
+          onOnlineUsersUpdate,
+          onError,
+          onTypingEvent,
+          onReadReceipt,
+          onPresenceUpdate,
+          roomId
+        );
+      }, 500);
       return;
     }
 
@@ -47,6 +64,9 @@ class WebSocketService {
       this.reconnectAttempts = 0;
       console.log('Connected: ' + frame);
 
+      // Start periodic heartbeat to keep session alive
+      this.startHeartbeat(roomId);
+
       // Public chat
       this.client.subscribe('/topic/public', (message) => {
         const receivedMessage = JSON.parse(message.body);
@@ -55,6 +75,17 @@ class WebSocketService {
         } else {
           onMessageReceived(receivedMessage);
         }
+      });
+
+      // Room-specific message channels (Kafka or service may broadcast to either)
+      this.client.subscribe(`/topic/room.${roomId}`, (message) => {
+        const received = JSON.parse(message.body);
+        onMessageReceived(received);
+      });
+
+      this.client.subscribe(`/topic/messages/${roomId}`, (message) => {
+        const received = JSON.parse(message.body);
+        onMessageReceived(received);
       });
 
       // Typing indicator (global)
@@ -100,6 +131,25 @@ class WebSocketService {
       // clear the client reference so future connect() calls can create a new one
       this.client = null;
     }
+    // Stop heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  startHeartbeat(roomId = 'global') {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    this.heartbeatInterval = setInterval(() => {
+      if (this.isConnected) {
+        this.client.publish({
+          destination: '/app/heartbeat',
+          body: JSON.stringify({ roomId: roomId }),
+        });
+      }
+    }, this.heartbeatIntervalMs);
   }
 
   sendMessage(message) {
@@ -111,6 +161,11 @@ class WebSocketService {
   }
 
   addUser(user) {
+    // deprecated: use addUserWithRoom(user, roomId) for room-aware joins
+    this.addUserWithRoom(user, 'global');
+  }
+
+  addUserWithRoom(user, roomId = 'global') {
     if (this.isConnected) {
       this.client.publish({
         destination: '/app/chat.addUser',
@@ -119,6 +174,7 @@ class WebSocketService {
           sender: user,
           content: `${user} joined the chat`,
           timestamp: new Date(),
+          roomId: roomId
         }),
       });
     }

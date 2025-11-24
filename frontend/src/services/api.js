@@ -105,6 +105,20 @@ export const messageAPI = {
   }
 };
 
+export const chatRoomDirectAPI = {
+  getOrCreateDirect: async (username) => {
+    const response = await api.post(`/chatrooms/direct?username=${encodeURIComponent(username)}`);
+    return response.data;
+  }
+};
+
+export const usersAPI = {
+  searchUsers: async (query) => {
+    const response = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+    return response.data;
+  }
+};
+
 export const fileAPI = {
   uploadFile: async (fileOrFormData, type) => {
     let formData;

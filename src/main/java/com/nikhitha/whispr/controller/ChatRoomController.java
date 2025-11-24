@@ -125,6 +125,18 @@ public class ChatRoomController {
         }
     }
 
+    @PostMapping("/direct")
+    public ResponseEntity<?> getOrCreateDirect(@RequestParam("username") String otherUsername,
+                                               Authentication authentication) {
+        try {
+            String requester = authentication.getName();
+            ChatRoom room = chatRoomService.getOrCreateDirectRoom(requester, otherUsername);
+            return ResponseEntity.ok(Map.of("roomId", room.getRoomId(), "room", room));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PutMapping("/{roomId}")
     public ResponseEntity<?> updateChatRoom(@PathVariable String roomId, 
                                            @RequestBody ChatRoomDTO chatRoomDTO,

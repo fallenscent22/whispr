@@ -34,7 +34,13 @@ public class WebSocketController {
     private PresenceService presenceService;
 
     @Autowired
+    private RoomPresenceService roomPresenceService;
+
+    @Autowired
     private KafkaProducerService kafkaProducerService;
+
+    @Autowired
+    private HeartbeatService heartbeatService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -68,22 +74,36 @@ public class WebSocketController {
     }
 
     @MessageMapping("/chat.addUser")
-    @SendTo("/topic/public")
-    public ChatMessage addUser(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
+    public void addUser(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
         logger.debug("User joining: {}", chatMessage.getSender());
         headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
         chatMessage.setTimestamp(LocalDateTime.now());
 
-        // Add to online users
+        // Add to global online users
         messageService.addOnlineUser(chatMessage.getSender());
         if (presenceService != null) {
             presenceService.userConnected(chatMessage.getSender(), headerAccessor.getSessionId());
         }
 
-        // Broadcast updated online users
+        // If the client provided a roomId, also track user in that room
+        String roomId = chatMessage.getRoomId();
+        if (roomId == null) {
+            roomId = "global";
+        }
+        if (roomPresenceService != null) {
+            roomPresenceService.userJoinedRoom(roomId, chatMessage.getSender());
+        }
+
+        // Broadcast updated global online users
         messagingTemplate.convertAndSend("/topic/online.users", messageService.getOnlineUsers());
 
-        return chatMessage;
+        // If the client provided a roomId, also send a join event into that room topic
+        if (chatMessage.getRoomId() != null && !"global".equals(chatMessage.getRoomId())) {
+            messagingTemplate.convertAndSend("/topic/room." + chatMessage.getRoomId(), chatMessage);
+        } else {
+            // fallback: also send to public topic for compatibility
+            messagingTemplate.convertAndSend("/topic/public", chatMessage);
+        }
     }
 
     @MessageMapping("/chat.leave")
@@ -92,13 +112,22 @@ public class WebSocketController {
         logger.debug("User leaving: {}", chatMessage.getSender());
         chatMessage.setTimestamp(LocalDateTime.now());
 
-        // Remove from online users
+        // Remove from global online users
         messageService.removeOnlineUser(chatMessage.getSender());
         if (presenceService != null) {
             presenceService.userDisconnected(chatMessage.getSender(), headerAccessor.getSessionId());
         }
 
-        // Broadcast updated online users
+        // Remove from room-specific presence
+        String roomId = chatMessage.getRoomId();
+        if (roomId == null) {
+            roomId = "global";
+        }
+        if (roomPresenceService != null) {
+            roomPresenceService.userLeftRoom(roomId, chatMessage.getSender());
+        }
+
+        // Broadcast updated global online users
         messagingTemplate.convertAndSend("/topic/online.users", messageService.getOnlineUsers());
 
         return chatMessage;
@@ -145,21 +174,38 @@ public class WebSocketController {
         }
     }
 
+    @MessageMapping("/heartbeat")
+    public void handleHeartbeat(@Payload HeartbeatRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        if (username != null && heartbeatService != null) {
+            heartbeatService.recordUserActivity(username);
+            if (request.getRoomId() != null) {
+                heartbeatService.recordRoomActivity(request.getRoomId(), username);
+            }
+            logger.debug("Heartbeat received from {}", username);
+        }
+    }
+
     // Inner classes for WebSocket messages
     @Data
-    public static class TypingRequest {
+    static class TypingRequest {
         private String roomId;
     }
 
     @Data
-    public static class ReadReceiptRequest {
+    static class ReadReceiptRequest {
         private Long messageId;
         private String roomId;
     }
 
     @Data
-    public static class DeliveryReceiptRequest {
+    static class DeliveryReceiptRequest {
         private Long messageId;
+        private String roomId;
+    }
+
+    @Data
+    static class HeartbeatRequest {
         private String roomId;
     }
 }

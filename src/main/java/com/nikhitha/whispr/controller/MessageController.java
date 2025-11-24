@@ -1,6 +1,7 @@
 package com.nikhitha.whispr.controller;
 
 
+import com.nikhitha.whispr.dto.MessageDTO;
 import com.nikhitha.whispr.entity.Message;
 import com.nikhitha.whispr.service.MessageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/messages")
@@ -19,20 +21,22 @@ public class MessageController {
     private MessageService messageService;
 
     @GetMapping("/recent/{roomId}")
-    public ResponseEntity<List<Message>> getRecentMessages(@PathVariable String roomId) {
+    public ResponseEntity<List<MessageDTO>> getRecentMessages(@PathVariable String roomId) {
         List<Message> messages = messageService.getRecentMessages(roomId);
-        return ResponseEntity.ok(messages);
+        List<MessageDTO> dtos = messages.stream().map(MessageDTO::fromEntity).collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     @GetMapping("/history/{roomId}")
-    public ResponseEntity<Page<Message>> getMessageHistory(
+    public ResponseEntity<Page<MessageDTO>> getMessageHistory(
             @PathVariable String roomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         
         Pageable pageable = PageRequest.of(page, size);
         Page<Message> messages = messageService.getMessageHistory(roomId, pageable);
-        return ResponseEntity.ok(messages);
+        Page<MessageDTO> dtos = messages.map(MessageDTO::fromEntity);
+        return ResponseEntity.ok(dtos);
     }
 
     @GetMapping("/online-users")

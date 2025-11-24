@@ -205,6 +205,8 @@ public class MessageService {
     public void handleIncomingChatMessage(ChatMessage chatMessage) {
         Message saved = saveMessage(chatMessage);
         String room = saved.getRoomId() != null ? saved.getRoomId() : "global";
+        // broadcast to room-specific topic (used by Kafka consumer) and keep messages channel for compatibility
+        messagingTemplate.convertAndSend("/topic/room." + room, chatMessage);
         messagingTemplate.convertAndSend("/topic/messages/" + room, chatMessage);
     }
 

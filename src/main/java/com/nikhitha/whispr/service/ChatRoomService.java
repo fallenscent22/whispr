@@ -209,4 +209,46 @@ public class ChatRoomService {
 
         return chatRoomRepository.save(chatRoom);
     }
+
+    @Transactional
+    public ChatRoom getOrCreateDirectRoom(String requesterUsername, String otherUsername) {
+        if (requesterUsername.equals(otherUsername)) {
+            throw new RuntimeException("Cannot create direct chat with yourself");
+        }
+
+        User requester = userRepository.findByUsername(requesterUsername)
+                .orElseThrow(() -> new RuntimeException("User not found: " + requesterUsername));
+
+        User other = userRepository.findByUsername(otherUsername)
+                .orElseThrow(() -> new RuntimeException("User not found: " + otherUsername));
+
+        // Look for existing DIRECT room that contains both users
+        List<RoomMember> requesterRooms = roomMemberRepository.findByUser(requester);
+        for (RoomMember rm : requesterRooms) {
+            ChatRoom room = rm.getChatRoom();
+            if (room.getType() == ChatRoom.RoomType.DIRECT) {
+                // check if other user is a member
+                boolean otherIsMember = roomMemberRepository.findByChatRoomAndUser(room, other).isPresent();
+                if (otherIsMember) {
+                    return room;
+                }
+            }
+        }
+
+        // Create new direct room
+        ChatRoom direct = new ChatRoom();
+        direct.setName("DM: " + requesterUsername + "," + otherUsername);
+        direct.setDescription("Direct chat between " + requesterUsername + " and " + otherUsername);
+        direct.setType(ChatRoom.RoomType.DIRECT);
+        direct.setIsPrivate(true);
+        direct.setCreatedBy(requester);
+
+        ChatRoom saved = chatRoomRepository.save(direct);
+
+        // add both users as members
+        addMemberToRoom(saved, requester, RoomMember.MemberRole.OWNER);
+        addMemberToRoom(saved, other, RoomMember.MemberRole.MEMBER);
+
+        return saved;
+    }
 }

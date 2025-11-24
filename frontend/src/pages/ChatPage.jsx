@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import WebSocketService from '../services/websocket';
+import { usersAPI, chatRoomDirectAPI } from '../services/api';
 
 const debounce = (func, wait) => {
   let timeout;
@@ -43,7 +44,15 @@ const useMessagePagination = (roomId) => {
   };
 
   const addNewMessage = (message) => {
-    setMessages(prev => [...prev, message]);
+    setMessages(prev => {
+      const updated = [...prev, message];
+      // Sort by timestamp to maintain order
+      return updated.sort((a, b) => {
+        const aTime = new Date(a.timestamp).getTime();
+        const bTime = new Date(b.timestamp).getTime();
+        return aTime - bTime;
+      });
+    });
   };
 
   const clearMessages = () => {
@@ -65,10 +74,13 @@ const useMessagePagination = (roomId) => {
 
 export const ChatPage = () => {
   const { user, logout } = useAuth();
+  const [currentRoomId, setCurrentRoomId] = useState('global');
   const [newMessage, setNewMessage] = useState('');
   const [typingUsers, setTypingUsers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [userQuery, setUserQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -80,10 +92,17 @@ export const ChatPage = () => {
     loading: loadingHistory,
     addNewMessage,
     clearMessages
-  } = useMessagePagination('global');
+  } = useMessagePagination(currentRoomId);
 
   const memoizedMessages = useMemo(() => messages, [messages]);
   const memoizedOnlineUsers = useMemo(() => onlineUsers, [onlineUsers]);
+
+  // When room changes, clear messages and reload them
+  useEffect(() => {
+    console.log('Room changed to:', currentRoomId);
+    clearMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId]);
 
   const debouncedStopTyping = useCallback(
     debounce(() => {
@@ -93,6 +112,25 @@ export const ChatPage = () => {
     }, 1000),
     [user]
   );
+
+  useEffect(() => {
+    const doSearch = async () => {
+      if (!userQuery || userQuery.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        const res = await usersAPI.searchUsers(userQuery);
+        // filter out current user
+        setSearchResults(res.filter(u => u !== user?.username));
+      } catch (err) {
+        console.error('User search failed', err);
+      }
+    };
+
+    const t = setTimeout(doSearch, 300);
+    return () => clearTimeout(t);
+  }, [userQuery, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -105,7 +143,7 @@ export const ChatPage = () => {
   useEffect(() => {
     const setupWebSocket = async () => {
       try {
-        console.log('WebSocket connecting to localhost:8080/ws');
+        console.log('WebSocket connecting to localhost:8080/ws for room:', currentRoomId);
         console.log('Auth token:', localStorage.getItem('token')?.substring(0, 20) + '...');
 
         WebSocketService.connect(
@@ -139,13 +177,13 @@ export const ChatPage = () => {
           (presenceUpdate) => {
             console.log('Presence update:', presenceUpdate);
           }
-        );
+        , currentRoomId);
 
         await loadMoreMessages(0);
 
         if (user) {
           setTimeout(() => {
-            WebSocketService.addUser(user.username);
+            WebSocketService.addUserWithRoom(user.username, currentRoomId);
           }, 500);
         }
 
@@ -159,7 +197,7 @@ export const ChatPage = () => {
 
     const handleFocus = () => {
       if (user) {
-        WebSocketService.markAsRead('global', user.username);
+        WebSocketService.markAsRead(currentRoomId, user.username);
       }
     };
 
@@ -175,7 +213,8 @@ export const ChatPage = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       WebSocketService.disconnect();
     };
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, currentRoomId]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -185,7 +224,7 @@ export const ChatPage = () => {
         content: newMessage,
         sender: user.username,
         timestamp: new Date(),
-        roomId: 'global'
+        roomId: currentRoomId
       };
       WebSocketService.sendMessage(message);
       setNewMessage('');
@@ -272,9 +311,46 @@ export const ChatPage = () => {
         </div>
 
         <div className="p-4 flex-1">
-          <h2 className="font-medium text-gray-700 mb-2">
-            Online Users ({memoizedOnlineUsers.length})
-          </h2>
+          <div className="mb-3">
+            <Input
+              type="text"
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              placeholder="Search users to message"
+              className="w-full mb-2"
+            />
+            {userQuery && searchResults.length > 0 && (
+              <div className="bg-white border rounded p-2 max-h-40 overflow-y-auto mb-2">
+                {searchResults.map((uname) => (
+                  <div key={uname} className="flex items-center justify-between py-1">
+                    <div className="text-sm">{uname}</div>
+                    <button
+                      className="text-xs text-blue-600 hover:underline"
+                      onClick={async () => {
+                        try {
+                          const res = await chatRoomDirectAPI.getOrCreateDirect(uname);
+                          const newRoomId = res.roomId || res.room?.roomId;
+                          if (newRoomId) {
+                            setCurrentRoomId(newRoomId);
+                            setUserQuery('');
+                            setSearchResults([]);
+                          }
+                        } catch (err) {
+                          console.error('Failed to open direct chat', err);
+                        }
+                      }}
+                    >
+                      Message
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <h2 className="font-medium text-gray-700 mb-2">
+              Online Users ({memoizedOnlineUsers.length})
+            </h2>
+          </div>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {memoizedOnlineUsers.map((onlineUser, index) => (
               <div key={`${onlineUser}-${index}`} className="flex items-center">
@@ -304,8 +380,14 @@ export const ChatPage = () => {
         <div className="bg-white shadow-sm p-4">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-semibold">Global Chat</h2>
-              <p className="text-sm text-gray-600">Chat with everyone online</p>
+              <h2 className="text-lg font-semibold">
+                {currentRoomId === 'global' ? 'Global Chat' : `Direct Message`}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {currentRoomId === 'global' 
+                  ? 'Chat with everyone online' 
+                  : 'Private conversation'}
+              </p>
             </div>
             <div className="text-sm text-gray-500">
               {messages.length} messages
