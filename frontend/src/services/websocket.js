@@ -24,9 +24,11 @@ class WebSocketService {
     onPresenceUpdate,
     roomId = 'global'
   ) {
+    const token = localStorage.getItem('token');
     const socket = new SockJS('http://localhost:8080/ws');
     this.client = new Client({
       webSocketFactory: () => socket,
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
       debug: (str) => console.log(str),
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,

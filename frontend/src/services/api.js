@@ -106,10 +106,15 @@ export const messageAPI = {
 };
 
 export const fileAPI = {
-  uploadFile: async (file, type) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', type);
+  uploadFile: async (fileOrFormData, type) => {
+    let formData;
+    if (fileOrFormData instanceof FormData) {
+      formData = fileOrFormData;
+    } else {
+      formData = new FormData();
+      formData.append('file', fileOrFormData);
+      formData.append('type', type);
+    }
 
     const response = await api.post('/files/upload', formData, {
       headers: {
@@ -122,22 +127,22 @@ export const fileAPI = {
 
 export const notificationAPI = {
   getNotifications: async () => {
-    const response = await api.get('/api/notifications');
+    const response = await api.get('/notifications');
     return response.data;
   },
 
   getUnreadCount: async () => {
-    const response = await api.get('/api/notifications/unread-count');
+    const response = await api.get('/notifications/unread-count');
     return response.data;
   },
 
   markAsRead: async (notificationId) => {
-    const response = await api.post(`/api/notifications/${notificationId}/mark-read`);
+    const response = await api.post(`/notifications/${notificationId}/mark-read`);
     return response.data;
   },
 
   markAllAsRead: async () => {
-    const response = await api.post('/api/notifications/mark-all-read');
+    const response = await api.post('/notifications/mark-all-read');
     return response.data;
   }
 };

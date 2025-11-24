@@ -105,6 +105,9 @@ export const ChatPage = () => {
   useEffect(() => {
     const setupWebSocket = async () => {
       try {
+        console.log('WebSocket connecting to localhost:8080/ws');
+        console.log('Auth token:', localStorage.getItem('token')?.substring(0, 20) + '...');
+
         WebSocketService.connect(
           (message) => {
             addNewMessage(message);
@@ -112,7 +115,6 @@ export const ChatPage = () => {
           (userEvent) => {
             addNewMessage(userEvent);
           },
-
           (typingUser) => {
             if (typingUser.typing) {
               setTypingUsers(prev => [...prev.filter(u => u !== typingUser.username), typingUser.username]);
@@ -120,13 +122,22 @@ export const ChatPage = () => {
               setTypingUsers(prev => prev.filter(u => u !== typingUser.username));
             }
           },
+          (onlineUsersList) => {
+            setOnlineUsers(onlineUsersList);
+            setConnectionStatus('connected');
+          },
           (error) => {
             console.error('WebSocket error:', error);
             setConnectionStatus('error');
           },
-          (onlineUsersList) => {
-            setOnlineUsers(onlineUsersList);
-            setConnectionStatus('connected');
+          (typingEvent) => {
+            console.log('Typing event:', typingEvent);
+          },
+          (readReceipt) => {
+            console.log('Read receipt:', readReceipt);
+          },
+          (presenceUpdate) => {
+            console.log('Presence update:', presenceUpdate);
           }
         );
 
