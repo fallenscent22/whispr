@@ -175,7 +175,7 @@ export const ChatPage = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       WebSocketService.disconnect();
     };
-  }, [user, loadMoreMessages, addNewMessage]);
+  }, [user]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();

@@ -24,6 +24,12 @@ class WebSocketService {
     onPresenceUpdate,
     roomId = 'global'
   ) {
+    // Avoid creating multiple active clients
+    if (this.client && this.client.active) {
+      console.log('WebSocket already connected or connecting. Skipping new connect.');
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const socket = new SockJS('http://localhost:8080/ws');
     this.client = new Client({
@@ -37,6 +43,8 @@ class WebSocketService {
 
     this.client.onConnect = (frame) => {
       this.isConnected = true;
+      // reset reconnect attempts on successful connect
+      this.reconnectAttempts = 0;
       console.log('Connected: ' + frame);
 
       // Public chat
@@ -89,6 +97,8 @@ class WebSocketService {
       this.client.deactivate();
       this.isConnected = false;
       console.log('Disconnected');
+      // clear the client reference so future connect() calls can create a new one
+      this.client = null;
     }
   }
 
@@ -193,14 +203,14 @@ class WebSocketService {
 
   //reconnection logic
 
-  connectWithRetry(callbacks, roomId = 'global') {
+  connectWithRetry(...args) {
     try {
-      this.connect(callbacks, roomId);
+      this.connect(...args);
     } catch (error) {
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         setTimeout(() => {
           this.reconnectAttempts++;
-          this.connectWithRetry(callbacks, roomId);
+          this.connectWithRetry(...args);
         }, this.reconnectInterval);
       }
     }
